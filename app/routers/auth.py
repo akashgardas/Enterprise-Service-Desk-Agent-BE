@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header
+import logging
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Dict, Any
 from bson import ObjectId
 from app.database import get_db
 from app.schemas.auth import (
@@ -15,6 +16,9 @@ from app.utils.mfa import generate_mfa_secret, get_totp_uri, verify_totp_code
 from app.models.user import UserRole, UserDoc
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
+# Logger for this router
+logger = logging.getLogger("enterprise_support.auth")
 
 # Helper dependency to authenticate users from JWT token in the Authorization header
 async def get_current_user(authorization: str = Header(None), db = Depends(get_db)) -> Dict[str, Any]:
