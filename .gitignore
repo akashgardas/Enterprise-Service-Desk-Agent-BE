@@ -1,36 +1,103 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ==========================================
+# Python Core & Byte-compiled / Optimized files
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local env files
-.env*.local
+# ==========================================
+# Environments (Virtualenvs)
+# ==========================================
 .env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
-# vercel
-.vercel
+# ==========================================
+# Secrets & Configuration
+# ==========================================
+# CRITICAL: Never commit your .env files containing:
+# - MongoDB URIs (Motor)
+# - Google Gemini API Keys (google-generativeai)
+# - JWT Secret Keys (PyJWT)
+# - TOTP master keys or secrets
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+client_secret.json
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# ==========================================
+# Machine Learning & Data (scikit-learn)
+# ==========================================
+# Ignore serialized models, vectorizers, and tf-idf matrices
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+*.npy
+*.npz
+
+# Ignore local datasets or ticket dumps used for testing/training
+*.csv
+*.tsv
+*.parquet
+data/
+datasets/
+
+# ==========================================
+# Packages & Distribution
+# ==========================================
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==========================================
+# Logs & Databases
+# ==========================================
+*.log
+logs/
+# If you run local mongo dumps
+dump/
+
+# ==========================================
+# Testing & Type Checking
+# ==========================================
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.pyre/
+.ruff_cache/
+
+# ==========================================
+# OS & IDE specifics
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
