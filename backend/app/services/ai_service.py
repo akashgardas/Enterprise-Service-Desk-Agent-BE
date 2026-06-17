@@ -1,6 +1,7 @@
 import logging
 import json
 import re
+from typing import Tuple
 from typing import List, Dict, Any, Optional
 import google.generativeai as genai
 from app.config import settings
@@ -19,44 +20,6 @@ if settings.GEMINI_API_KEY:
         logger.warning(f"Failed to configure Gemini API: {e}. Falling back to rule-based engine.")
 
 class AIService:
-    @classmethod
-    async def analyze_root_cause(
-        cls,
-        title: str,
-        description: str,
-        category: str
-    ):
-        prompt = f"""
-        Analyze this IT incident.
-
-        Title: {title}
-        Description: {description}
-        Category: {category}
-
-        Return JSON:
-
-        {{
-            "probable_root_cause": "...",
-            "business_impact": "...",
-            "recommended_action": "...",
-            "confidence": 0.0
-        }}
-        """
-
-        response = cls._call_gemini(prompt)
-
-        if response:
-            try:
-                return json.loads(response)
-            except:
-                pass
-
-        return {
-            "probable_root_cause": "Unknown",
-            "business_impact": "Unknown",
-            "recommended_action": "Manual investigation required",
-            "confidence": 0.0
-        }
     @staticmethod
     def _call_gemini(prompt: str, json_mode: bool = True) -> Optional[str]:
         if not is_gemini_active:
@@ -374,3 +337,229 @@ class AIService:
             "suggested_action": suggested_action,
             "chat_session_id": session_id
         }
+    @classmethod
+    async def check_duplicate_with_gemini(
+        cls,
+        title: str,
+        description: str,
+        candidate_tickets: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Uses Gemini to determine whether a ticket is a duplicate
+        from a small list of TF-IDF shortlisted candidates.
+
+        Returns:
+        {
+            "is_duplicate": bool,
+            "linkable": bool,
+            "master_id": str,
+            "similarity": float,
+            "reason": str
+        }
+        """
+
+        if not is_gemini_active:
+            return None
+
+        if not candidate_tickets:
+            return None
+
+        try:
+            candidates_text = []
+
+            for idx, ticket in enumerate(candidate_tickets):
+                candidates_text.append(
+                    f"""
+Candidate #{idx}
+
+Ticket ID:
+{ticket.get('_id')}
+
+Title:
+{ticket.get('title', '')}
+
+Description:
+{ticket.get('description', '')}
+"""
+                )
+
+            prompt = f"""
+You are an IT Service Desk duplicate detection agent.
+
+NEW TICKET
+
+Title:
+{title}
+
+Description:
+{description}
+
+POSSIBLE MATCHES
+
+{chr(10).join(candidates_text)}
+
+Determine whether the new ticket is:
+
+1. Exact Duplicate
+2. Related Issue
+3. Completely New Issue
+
+Respond ONLY as JSON:
+
+{{
+    "decision": "duplicate | related | new",
+    "candidate_index": 0,
+    "similarity": 0.0,
+    "reason": "brief explanation"
+}}
+"""
+
+            response = cls._call_gemini(prompt, json_mode=True)
+
+            if not response:
+                return None
+
+            result = json.loads(response)
+
+            decision = str(
+                result.get("decision", "new")
+            ).lower()
+
+            idx = int(result.get("candidate_index", 0))
+            similarity = float(result.get("similarity", 0.0))
+            reason = result.get("reason", "")
+
+            if idx < 0 or idx >= len(candidate_tickets):
+                return None
+
+            matched_ticket = candidate_tickets[idx]
+
+            if decision == "duplicate":
+                return {
+                    "is_duplicate": True,
+                    "linkable": False,
+                    "master_id": str(matched_ticket["_id"]),
+                    "similarity": similarity,
+                    "reason": reason
+                }
+
+            if decision == "related":
+                return {
+                    "is_duplicate": False,
+                    "linkable": True,
+                    "master_id": str(matched_ticket["_id"]),
+                    "similarity": similarity,
+                    "reason": reason
+                }
+
+            return {
+                "is_duplicate": False,
+                "linkable": False,
+                "master_id": None,
+                "similarity": similarity,
+                "reason": reason
+            }
+
+        except Exception as e:
+            logger.error(
+                f"Gemini duplicate detection failed: {e}"
+            )
+            return None
+
+    @classmethod
+    async def semantic_kb_search(
+        cls,
+        query: str,
+        candidate_articles: List[Dict[str, Any]],
+        limit: int = 3
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        Gemini reranks KB articles that were already shortlisted
+        by TF-IDF retrieval.
+
+        Returns ranked article list or None.
+        """
+
+        if not is_gemini_active:
+            return None
+
+        if not candidate_articles:
+            return None
+
+        try:
+            articles_text = []
+
+            for idx, article in enumerate(candidate_articles):
+                articles_text.append(
+                    f"""
+Article #{idx}
+
+ID:
+{article.get('id')}
+
+Title:
+{article.get('title', '')}
+
+Category:
+{article.get('category', '')}
+
+Content:
+{article.get('content', '')[:2000]}
+"""
+                )
+
+            prompt = f"""
+You are a Knowledge Base retrieval agent.
+
+USER QUERY
+
+{query}
+
+KB ARTICLES
+
+{chr(10).join(articles_text)}
+
+Select the most relevant articles.
+
+Respond ONLY as JSON:
+
+{{
+  "ranked_indexes": [0,1,2]
+}}
+"""
+
+            response = cls._call_gemini(prompt, json_mode=True)
+
+            if not response:
+                return None
+
+            result = json.loads(response)
+
+            ranked_indexes = result.get(
+                "ranked_indexes",
+                []
+            )
+
+            reranked_articles = []
+
+            for idx in ranked_indexes:
+                try:
+                    idx = int(idx)
+
+                    if 0 <= idx < len(candidate_articles):
+                        reranked_articles.append(
+                            candidate_articles[idx]
+                        )
+                except Exception:
+                    continue
+
+            if not reranked_articles:
+                return None
+
+            return reranked_articles[:limit]
+
+        except Exception as e:
+            logger.error(
+                f"Gemini KB reranking failed: {e}"
+            )
+            return None
