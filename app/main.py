@@ -4,7 +4,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import connect_db, disconnect_db
-from app.routers import auth, tickets, kb, chat, analytics
+from app.routers import tickets
+from app.routers import analytics
+from app.routers import auth
+from app.routers import chat
+from app.routers import kb
 
 # Configure logger formatting
 logging.basicConfig(
