@@ -10,7 +10,7 @@ from app.routers.auth import get_current_user
 from app.services.ai_service import AIService
 from app.services.kb_service import KbService
 
-router = APIRouter(prefix="/api/chat", tags=["AI Chatbot"])
+router = APIRouter(prefix="/chat", tags=["AI Chatbot"])
 
 @router.post("/sessions", response_model=ChatSessionOut, status_code=status.HTTP_201_CREATED)
 async def create_chat_session(

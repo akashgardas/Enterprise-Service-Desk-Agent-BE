@@ -9,6 +9,10 @@ from app.routers import analytics
 from app.routers import auth
 from app.routers import chat
 from app.routers import kb
+from app.routers import users
+from app.routers import ai
+from app.routers import notifications
+from app.routers import activities
 
 # Configure logger formatting
 logging.basicConfig(
@@ -41,12 +45,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API Routers
+# Include API Routers under /api (legacy backend compatibility)
+app.include_router(auth.router, prefix="/api")
+app.include_router(tickets.router, prefix="/api")
+app.include_router(tickets.router, prefix="/api/auth")
+app.include_router(kb.router, prefix="/api")
+app.include_router(kb.kb_router, prefix="/api")
+app.include_router(chat.router, prefix="/api")
+app.include_router(analytics.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
+app.include_router(ai.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
+app.include_router(activities.router, prefix="/api")
+
+# Include API Routers under root / (frontend integration)
 app.include_router(auth.router)
 app.include_router(tickets.router)
 app.include_router(kb.router)
+app.include_router(kb.kb_router)
 app.include_router(chat.router)
 app.include_router(analytics.router)
+app.include_router(users.router)
+app.include_router(ai.router)
+app.include_router(notifications.router)
+app.include_router(activities.router)
+
 
 @app.get("/", tags=["Health Check"])
 def health_check():
