@@ -111,7 +111,7 @@ class AIService:
         priority = TicketPriority.MEDIUM
         if any(kw in text for kw in ["system down", "outage", "entire system", "production down", "global issue", "ransomware", "hacked"]):
             priority = TicketPriority.CRITICAL
-        elif any(kw in text for kw in ["department", "team blocked", "cannot work", "major"]):
+        elif any(kw in text for kw in ["department", "team blocked", "major"]):
             priority = TicketPriority.HIGH
         elif any(kw in text for kw in ["how do i", "how to", "question", "request info", "information request"]):
             priority = TicketPriority.LOW

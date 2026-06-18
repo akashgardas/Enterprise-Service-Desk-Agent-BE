@@ -27,8 +27,19 @@ class UserRegister(BaseModel):
         return validate_password_strength(v)
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: Optional[EmailStr] = None
     password: str
+    role: Optional[str] = None
+
+class ChangePasswordRequest(BaseModel):
+    oldPassword: str
+    newPassword: str
+
+    @field_validator("newPassword")
+    @classmethod
+    def check_password(cls, v: str) -> str:
+        return validate_password_strength(v)
+
 
 class TokenResponse(BaseModel):
     access_token: str

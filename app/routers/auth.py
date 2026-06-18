@@ -6,7 +6,8 @@ from bson import ObjectId
 from app.database import get_db
 from app.schemas.auth import (
     UserRegister, UserLogin, TokenResponse, MfaRequiredResponse,
-    MfaVerifyRequest, MfaSetupResponse, PasswordResetRequest, PasswordResetConfirm
+    MfaVerifyRequest, MfaSetupResponse, PasswordResetRequest, PasswordResetConfirm,
+    ChangePasswordRequest
 )
 from app.utils.security import (
     hash_password, verify_password, create_access_token, decode_access_token,
@@ -15,7 +16,25 @@ from app.utils.security import (
 from app.utils.mfa import generate_mfa_secret, get_totp_uri, verify_totp_code
 from app.models.user import UserRole, UserDoc
 
-router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+def format_user(user: dict) -> dict:
+    uid = str(user.get("_id") or user.get("id"))
+    created_at = user.get("created_at")
+    if isinstance(created_at, datetime):
+        created_at = created_at.isoformat()
+    return {
+        "id": uid,
+        "_id": uid,
+        "name": user.get("name"),
+        "email": user.get("email"),
+        "role": user.get("role"),
+        "department": user.get("department", "IT"),
+        "phone": user.get("phone", ""),
+        "status": user.get("status", "active"),
+        "createdAt": created_at,
+        "created_at": created_at
+    }
 
 # Logger for this router
 logger = logging.getLogger("enterprise_support.auth")
@@ -84,6 +103,11 @@ async def register(user_data: UserRegister, db = Depends(get_db)):
 
 @router.post("/login", response_model=Any)
 async def login(credentials: UserLogin, db = Depends(get_db)):
+    if not credentials.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email is required"
+        )
     user = await db.users.find_one({"email": credentials.email.lower()})
     if not user:
         raise HTTPException(
@@ -147,12 +171,16 @@ async def login(credentials: UserLogin, db = Depends(get_db)):
 
     # Generate standard JWT Access Token
     access_token = create_access_token(data={"sub": user["email"], "role": user["role"]})
-    return TokenResponse(
-        access_token=access_token,
-        role=user["role"],
-        name=user["name"],
-        email=user["email"]
-    )
+    formatted_u = format_user(user)
+    return {
+        "access_token": access_token,
+        "token": access_token,
+        "token_type": "bearer",
+        "role": user["role"],
+        "name": user["name"],
+        "email": user["email"],
+        "user": formatted_u
+    }
 
 @router.post("/mfa/setup", response_model=MfaSetupResponse)
 async def setup_mfa(current_user = Depends(get_current_user), db = Depends(get_db)):
@@ -198,7 +226,7 @@ async def enable_mfa(request: MfaVerifyRequest, db = Depends(get_db)):
         detail="Invalid verification code. Please try again."
     )
 
-@router.post("/mfa/verify", response_model=TokenResponse)
+@router.post("/mfa/verify", response_model=Any)
 async def verify_mfa(request: MfaVerifyRequest, db = Depends(get_db)):
     """Verifies MFA OTP during login process."""
     email = decode_mfa_token(request.mfa_token)
@@ -218,22 +246,47 @@ async def verify_mfa(request: MfaVerifyRequest, db = Depends(get_db)):
     if verify_totp_code(user["mfa_secret"], request.code):
         # Generate final JWT
         access_token = create_access_token(data={"sub": user["email"], "role": user["role"]})
-        return TokenResponse(
-            access_token=access_token,
-            role=user["role"],
-            name=user["name"],
-            email=user["email"]
-        )
+        formatted_u = format_user(user)
+        return {
+            "access_token": access_token,
+            "token": access_token,
+            "token_type": "bearer",
+            "role": user["role"],
+            "name": user["name"],
+            "email": user["email"],
+            "user": formatted_u
+        }
         
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
         detail="Invalid MFA code"
     )
 
-@router.post("/logout", response_model=Dict[str, str])
+@router.post("/logout", response_model=Dict[str, Any])
 async def logout(current_user = Depends(get_current_user)):
     """Logs out user session. (Client discards JWT token)."""
-    return {"message": "Logged out successfully"}
+    return {"success": True, "message": "Logged out successfully"}
+
+@router.post("/change-password", response_model=Dict[str, Any])
+async def change_password(
+    request: ChangePasswordRequest,
+    current_user = Depends(get_current_user),
+    db = Depends(get_db)
+):
+    """Changes password for the authenticated user."""
+    # Verify old password
+    if not verify_password(request.oldPassword, current_user.get("password_hash", "")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect old password"
+        )
+    
+    hashed = hash_password(request.newPassword)
+    await db.users.update_one(
+        {"_id": current_user["_id"]},
+        {"$set": {"password_hash": hashed, "updated_at": datetime.utcnow()}}
+    )
+    return {"success": True, "message": "Password changed successfully"}
 
 @router.post("/password/reset-request", response_model=Dict[str, str])
 async def password_reset_request(request: PasswordResetRequest, db = Depends(get_db)):
