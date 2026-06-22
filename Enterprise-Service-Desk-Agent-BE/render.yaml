@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: enterprise-service-desk-be
+    env: python
+    region: oregon
+    branch: main
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT app.main:app
+    healthCheckPath: /
+    envVars:
+      - key: MONGO_URI
+        value: ""
+      - key: DATABASE_NAME
+        value: ""
+      - key: JWT_SECRET_KEY
+        value: ""
+      - key: MFA_JWT_SECRET_KEY
+        value: ""
+      - key: GEMINI_API_KEY
+        value: ""
